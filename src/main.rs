@@ -60,7 +60,8 @@ fn main() {
     let new_path = ::std::env::var("PATHX").unwrap();
     let folder = ::std::env::var("DEST").unwrap();
 
-    let ((info, checksum), (thumb_sm, thumb_lg)) = ::rayon::join(
+    // Doesn't work
+    ::rayon::join(
         || ::rayon::join(
             || thumbnail(&new_path, 1, &folder),
             || thumbnail(&new_path, 2, &folder)
@@ -71,8 +72,11 @@ fn main() {
         )
     );
 
-    let (info, checksum, thumb_sm, thumb_lg) = 
-        (info.unwrap(), checksum.unwrap(), thumb_sm.ok(), thumb_lg.ok());
+    //Works fine when run by itself
+    ::rayon::join(
+        || thumbnail(&new_path, 5, &folder),
+        || thumbnail(&new_path, 6, &folder)
+    );
 
     
 
