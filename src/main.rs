@@ -21,76 +21,20 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub fn checksum<T: AsRef<Path>>(path: T) -> Result<String> {
-    use crypto::digest::Digest;
-    use std::io::Read;
-    const CAP: usize = 1024 * 128;
-    let mut buffer = [0u8; CAP];
-    let mut file = File::open(path)?;
-    let mut md5 = ::crypto::md5::Md5::new();
-    loop {
-        let n = file.read(&mut buffer)?;
-        if n == 0 { break; }
-        md5.input(&buffer[..n]);
-    }
-    Ok(md5.result_str())
-}
-
-#[derive(Deserialize, Debug)]
-pub struct FfmpegInfoFormat {
-    duration: String
-}
-
-#[derive(Deserialize, Debug)]
-pub struct FfmpegInfoStream {
-    pub codec_type: String,
-    pub width: Option<u64>,
-    pub height: Option<u64>
-}
-
-#[derive(Deserialize, Debug)]
-pub struct FfmpegInfo {
-    pub streams: Vec<FfmpegInfoStream>,
-    pub format: FfmpegInfoFormat
-}
-
-pub fn info<T: AsRef<Path>>(path: T) -> Result<FfmpegInfo> {
-    let output = Command::new("ffprobe")
-        .arg("-v")
-        .arg("quiet")
-        .arg("-print_format")
-        .arg("json")
-        .arg("-show_format")
-        .arg("-show_streams")
-        .arg(&*path.as_ref().to_string_lossy())
-        .output()?;
-
-    Ok(::serde_json::from_slice(&output.stdout)?)
-}
-
-pub fn thumbnail<T: AsRef<Path>>(
-    path: T,
-    dest: T,
-    at: Option<usize>,
-    width: Option<i64>,
-    height: Option<i64>) -> Result<String> {
+pub fn thumbnail<T: AsRef<Path>>(path: T, i: usize, dest: T) -> Result<String> {
 
     let path = path.as_ref();
 
     let name = {
         let stem = path.file_stem().ok_or("Couldn't determine file stem")?;
-        let qual = [
-            width.map(|x| format!("{}", x) ).unwrap_or("".into()),
-            height.map(|x| format!("{}", x) ).unwrap_or("".into())].join("x");
-        
-        format!("{}_{}.jpg", stem.to_string_lossy(), qual)
+        format!("{}_{}_thumb.jpg", stem.to_string_lossy(), i)
     };
 
     let output = dest.as_ref().join(&name);
 
     let status = Command::new("ffmpeg")            
         .arg("-ss")
-        .arg(&format!("{}", at.unwrap_or(5)))
+        .arg("5")
         .arg("-i")
         .arg(path)
         .arg("-vframes")
@@ -100,7 +44,7 @@ pub fn thumbnail<T: AsRef<Path>>(
         .arg("-v")
         .arg("quiet")
         .arg("-vf")
-        .arg(&format!("scale={}:{}", width.unwrap_or(-1), height.unwrap_or(-1)))
+        .arg("scale=192:-1")
         .arg(&output)
         .status()?;
 
@@ -118,12 +62,12 @@ fn main() {
 
     let ((info, checksum), (thumb_sm, thumb_lg)) = ::rayon::join(
         || ::rayon::join(
-            || info(&new_path),
-            || checksum(&new_path)
+            || thumbnail(&new_path, 1, &folder),
+            || thumbnail(&new_path, 2, &folder)
         ),
         || ::rayon::join(
-            || thumbnail(&new_path, &folder, Some(5), Some(192), None),
-            || thumbnail(&new_path, &folder, Some(5), Some(420), None)
+            || thumbnail(&new_path, 3, &folder),
+            || thumbnail(&new_path, 4, &folder)
         )
     );
 
